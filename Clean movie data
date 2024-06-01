@@ -1,0 +1,103 @@
+#Load required libraries
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(readxl)
+library(lubridate)
+
+#import data from csv file into RStudio
+movie_data <- read_csv("movie_dataset.csv")
+
+# View dataframe
+View(movie_data)
+
+#Check if data is in correct format
+head(movie_data)
+
+#Create dataframe for working
+work_data <- movie_data
+
+View(work_data)
+
+#Drop unnecessary columns
+work_data$release_date <- NULL
+work_data$overview <- NULL
+work_data$popularity <- NULL
+work_data$vote_count <- NULL
+
+work_data <- work_data %>%
+  rename(ratings = vote_average)
+
+#Check for duplicates and nulls
+#Check ID column for duplicates
+duplicate_entries <- work_data %>%
+  group_by(id) %>%
+  filter(n() > 1) %>%
+  ungroup()
+View(duplicate_entries)
+
+#There are 3 movies with duplicates entries
+
+#Remove duplicated data
+work_data <- work_data %>%
+  distinct(id, .keep_all = TRUE)
+
+#Check for null values
+apply(X = is.na(work_data), MARGIN = 2, FUN = sum) #No Null values
+
+#Create release year column
+work_data <- work_data %>%
+  mutate(
+    release_year = year(ymd(release_date))
+  )
+
+#Check title column for duplicates
+duplicate_titles <- work_data %>%
+  group_by(title) %>%
+  filter(n() > 1) %>%
+  ungroup() %>%
+  arrange(title)
+
+#There are movies with the same titles but different records. these are probably reboots/remasters
+#For proper data handling lets format the titles to include the year it was released
+
+
+
+duplicate_titles <- duplicate_titles %>%
+  mutate(title = paste(title, release_year))
+
+#Created another staging table in case there are errors in joining the values in the dataframes
+work_data2 <- work_data
+
+work_data2 <- work_data %>%
+  left_join(duplicate_titles %>% 
+              select(id, title), by = "id", suffix = c("", "_new")) %>%
+  mutate(title = ifelse(!is.na(title_new), title_new, title)) %>%
+  select(-title_new)
+View(work_data2)
+
+#The code executed correctly. move data to original working table and drop staging table
+work_data <- work_data2
+rm(work_data2)
+
+
+#EDA 
+#now that the data is cleaned it is ready for analysis. Let's create data frames with only the data required for each analysis task
+
+genre <- work_data %>%
+  select(id, release_year, genres, ratings)
+
+genre <- genre %>%
+  separate_rows(genres, sep = ", ")
+View(genre)
+
+genre <- genre %>%
+  rename(genre = genres)
+
+#Export data to excel for further analysis
+write_csv(genre, "C:\\Users\\Abdulmalik\\Documents\\genres.csv")
+
+write_csv(work_data, "C:\\Users\\Abdulmalik\\Documents\\moviesEDA.csv")
+
+
+
